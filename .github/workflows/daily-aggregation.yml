@@ -17,18 +17,22 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
+        path: /github/workspace
     
     - name: Install dependencies
+      working-directory: /github/workspace
       run: |
         apt-get update && apt-get install -y git
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
     
     - name: Run host aggregation script
+      working-directory: /github/workspace
       run: |
         python3 host_aggregator.py
     
     - name: Clean up old timestamped files (keep last 30 days)
+      working-directory: /github/workspace
       run: |
         # Find and remove CSV files older than 30 days
         find data/ -name "host_entries_*.csv" -type f -mtime +30 -delete
@@ -36,6 +40,7 @@ jobs:
     
     - name: Check for changes
       id: verify-changed-files
+      working-directory: /github/workspace
       run: |
         if [ -n "$(git status --porcelain)" ]; then
           echo "changed=true" >> $GITHUB_OUTPUT
@@ -44,11 +49,13 @@ jobs:
         fi
     
     - name: Switch to hosts branch
+      working-directory: /github/workspace
       run: |
         git checkout hosts
     
     - name: Commit and push changes to hosts branch
       if: steps.verify-changed-files.outputs.changed == 'true'
+      working-directory: /github/workspace
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
