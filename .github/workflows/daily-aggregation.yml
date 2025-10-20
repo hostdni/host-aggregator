@@ -60,7 +60,7 @@ jobs:
         git push origin hosts
     
     - name: Upload CSV as artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: host-entries-${{ github.run_number }}
         path: data/
