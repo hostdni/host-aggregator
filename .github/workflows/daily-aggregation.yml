@@ -15,6 +15,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -45,14 +46,18 @@ jobs:
           echo "changed=false" >> $GITHUB_OUTPUT
         fi
     
-    - name: Commit and push changes
+    - name: Switch to hosts branch
+      run: |
+        git checkout hosts
+    
+    - name: Commit and push changes to hosts branch
       if: steps.verify-changed-files.outputs.changed == 'true'
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add data/
         git commit -m "Update host entries - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-        git push
+        git push origin hosts
     
     - name: Upload CSV as artifact
       uses: actions/upload-artifact@v3

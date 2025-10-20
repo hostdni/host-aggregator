@@ -84,9 +84,9 @@ The generated CSV files contain the following columns:
 
 2. **Manual Trigger**: You can manually trigger the workflow from the GitHub Actions tab.
 
-3. **Access Data**: Generated CSV files are available in the `data/` directory and can be accessed via:
+3. **Access Data**: Generated CSV files are available in the `data/` directory on the `hosts` branch and can be accessed via:
    ```
-   https://raw.githubusercontent.com/<username>/<repo>/main/data/latest.csv
+   https://raw.githubusercontent.com/<username>/<repo>/hosts/data/latest.csv
    ```
 
 ## Usage
@@ -95,7 +95,7 @@ The generated CSV files contain the following columns:
 
 The latest aggregated dataset is always available at:
 ```
-https://raw.githubusercontent.com/<username>/<repo>/main/data/latest.csv
+https://raw.githubusercontent.com/<username>/<repo>/hosts/data/latest.csv
 ```
 
 ### Programmatic Access
@@ -105,7 +105,7 @@ import pandas as pd
 import requests
 
 # Load the latest dataset
-url = "https://raw.githubusercontent.com/<username>/<repo>/main/data/latest.csv"
+url = "https://raw.githubusercontent.com/<username>/<repo>/hosts/data/latest.csv"
 df = pd.read_csv(url)
 
 # Filter by category
@@ -152,12 +152,26 @@ with open('custom_hosts.txt', 'w') as f:
 4. **Generate**: Creates timestamped CSV file
 5. **Update**: Updates `latest.csv` file
 6. **Cleanup**: Removes timestamped files older than 30 days
-7. **Commit**: Commits changes to repository
+7. **Branch**: Switches to `hosts` branch
+8. **Commit**: Commits changes to `hosts` branch
 
 ### Output Files
 
 - `data/host_entries_YYYYMMDD_HHMMSS.csv` - Timestamped dataset (kept for 30 days)
 - `data/latest.csv` - Latest dataset (always current, never deleted)
+
+### Branch Structure
+
+The repository uses a **dual-branch approach**:
+
+- **`main` branch**: Contains source code, documentation, and CI/CD configuration
+- **`hosts` branch**: Contains only the generated CSV data files
+
+**Benefits:**
+- **Clean separation** between code and data
+- **Easier data access** via raw GitHub URLs
+- **Reduced main branch clutter** from daily CSV commits
+- **Better performance** for data consumers (smaller branch)
 
 ### Storage Management
 
