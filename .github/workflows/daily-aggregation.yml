@@ -18,6 +18,13 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
     
+    - name: Initialize git repository
+      run: |
+        git init
+        git remote add origin https://github.com/hostdni/host-aggregator.git
+        git fetch origin
+        git checkout -b hosts origin/hosts || git checkout hosts
+    
     - name: Install dependencies
       run: |
         apt-get update && apt-get install -y git
