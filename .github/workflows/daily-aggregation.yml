@@ -1,0 +1,62 @@
+name: Daily Host Aggregation
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  aggregate-hosts:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run host aggregation script
+      run: |
+        python host_aggregator.py
+    
+    - name: Clean up old timestamped files (keep last 30 days)
+      run: |
+        # Find and remove CSV files older than 30 days
+        find data/ -name "host_entries_*.csv" -type f -mtime +30 -delete
+        echo "Cleaned up CSV files older than 30 days"
+    
+    - name: Check for changes
+      id: verify-changed-files
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Commit and push changes
+      if: steps.verify-changed-files.outputs.changed == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add data/
+        git commit -m "Update host entries - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+        git push
+    
+    - name: Upload CSV as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: host-entries-${{ github.run_number }}
+        path: data/
+        retention-days: 30
