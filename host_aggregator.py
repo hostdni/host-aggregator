@@ -79,6 +79,38 @@ def fetch_host_file(url: str) -> str:
         raise
 
 
+def should_filter_entry(hostname: str) -> bool:
+    """
+    Check if a hostname should be filtered out (localhost, loopback, system entries).
+    
+    Args:
+        hostname: The hostname to check
+        
+    Returns:
+        True if the entry should be filtered out, False otherwise
+    """
+    # Convert to lowercase for case-insensitive comparison
+    hostname_lower = hostname.lower()
+    
+    # List of hostnames to filter out
+    filtered_hostnames = {
+        'localhost',
+        'localhost.localdomain', 
+        'local',
+        'broadcasthost',
+        'ip6-localhost',
+        'ip6-loopback',
+        'ip6-localnet',
+        'ip6-mcastprefix',
+        'ip6-allnodes',
+        'ip6-allrouters',
+        'ip6-allhosts',
+        '0.0.0.0'
+    }
+    
+    return hostname_lower in filtered_hostnames
+
+
 def parse_host_file(content: str, category: str) -> List[Dict[str, str]]:
     """
     Parse host file content and extract host entries.
@@ -111,6 +143,11 @@ def parse_host_file(content: str, category: str) -> List[Dict[str, str]]:
                 # Clean up hostname (remove any trailing comments)
                 hostname = hostname.split("#")[0].strip()
                 if hostname and not hostname.startswith("#"):
+                    # Filter out localhost and system entries
+                    if should_filter_entry(hostname):
+                        logger.debug(f"Filtered out system entry: {hostname}")
+                        continue
+                    
                     entry = {
                         "entry": hostname,
                         "category": category,

@@ -17,7 +17,7 @@ The aggregator fetches from these sources:
 
 | Source | Category | Description |
 |--------|----------|-------------|
-| [StevenBlack/hosts](https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts) | Adware & Malware | Main hosts file |
+| [Adware & Malware](https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts) | Adware & Malware | Main hosts file |
 | [Fake News](https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-only/hosts) | Fake news | Fake news domains |
 | [Gambling](https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts) | Gambling | Gambling-related domains |
 | [Porn](https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts) | Porn | Adult content domains |
