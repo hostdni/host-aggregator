@@ -24,12 +24,10 @@ jobs:
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
     
-    - name: Initialize git repository
+    - name: Checkout hosts branch and rebase from main
       run: |
-        git init
-        git remote add origin https://github.com/hostdni/host-aggregator.git
-        git fetch origin
-        git checkout -b hosts origin/hosts || git checkout hosts
+        git checkout hosts
+        git rebase main
     
     - name: Run host aggregation script
       run: |
