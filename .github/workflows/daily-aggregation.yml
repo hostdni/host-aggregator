@@ -18,14 +18,14 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
 
-    - name: Checkout hosts branch and rebase from main
-    run: |
-      git checkout hosts
-      git rebase main
-      
-    - name: Install dependencies
+    - name: Install git and checkout hosts branch
       run: |
         apt-get update && apt-get install -y git
+        git checkout hosts
+        git rebase main
+
+    - name: Install Python dependencies
+      run: |
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
     
