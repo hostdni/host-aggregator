@@ -29,11 +29,27 @@ jobs:
         git config --global user.email "HostDNIBot@rapidrabbit.software"
         git config --global user.name "HostDNIBot"
         git fetch origin main
-        # Use merge with strategy to prefer main branch for conflicts
-        git merge origin/main -X theirs --no-edit || {
-          # If merge still fails, reset to main and recreate hosts branch
-          echo "Merge failed, resetting hosts branch to match main"
-          git reset --hard origin/main
+        # Try merge first
+        git merge origin/main --no-edit || {
+          # If merge fails due to conflicts, resolve them specifically
+          echo "Merge conflicts detected, resolving..."
+          # For data/README.md, keep the hosts branch version (ours)
+          if git status --porcelain | grep -q "data/README.md"; then
+            echo "Resolving data/README.md conflict - keeping hosts branch version"
+            git checkout --ours data/README.md
+            git add data/README.md
+          fi
+          # Continue the merge
+          git commit --no-edit || {
+            echo "Still conflicts, resetting to main and preserving data/README.md"
+            # Backup our README.md
+            cp data/README.md /tmp/hosts_readme.md
+            git reset --hard origin/main
+            # Restore our README.md
+            cp /tmp/hosts_readme.md data/README.md
+            git add data/README.md
+            git commit -m "Preserve hosts branch data/README.md formatting"
+          }
         }
     
     - name: Run host aggregation script
