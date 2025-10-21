@@ -36,7 +36,8 @@ jobs:
         
         # Ensure we're on hosts branch
         git checkout hosts
-        git rebase main
+        git fetch origin main
+        git rebase origin/main
         
     
     - name: Run host aggregation script
