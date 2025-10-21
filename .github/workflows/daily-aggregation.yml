@@ -24,33 +24,28 @@ jobs:
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
 
-    - name: Update hosts branch with main changes
+        with:
+          fetch-depth: 0  # Needed so we have full git history for merge/rebase
+
+    - name: Configure Git
       run: |
-        git config --global user.email "HostDNIBot@rapidrabbit.software"
-        git config --global user.name "HostDNIBot"
-        git fetch origin main
-        # Try merge first
-        git merge origin/main --no-edit || {
-          # If merge fails due to conflicts, resolve them specifically
-          echo "Merge conflicts detected, resolving..."
-          # For data/README.md, keep the hosts branch version (ours)
-          if git status --porcelain | grep -q "data/README.md"; then
-            echo "Resolving data/README.md conflict - keeping hosts branch version"
-            git checkout --ours data/README.md
-            git add data/README.md
-          fi
-          # Continue the merge
-          git commit --no-edit || {
-            echo "Still conflicts, resetting to main and preserving data/README.md"
-            # Backup our README.md
-            cp data/README.md /tmp/hosts_readme.md
-            git reset --hard origin/main
-            # Restore our README.md
-            cp /tmp/hosts_readme.md data/README.md
-            git add data/README.md
-            git commit -m "Preserve hosts branch data/README.md formatting"
-          }
-        }
+        git config user.name "HostDNIBot"
+        git config user.email "HostDNIBot@rapidrabbit.software"
+
+    - name: Fetch all branches
+      run: git fetch origin
+
+    - name: Checkout host branch
+      run: git checkout hosts
+
+    - name: Merge latest main into host branch
+      run: |
+        git merge origin/main --no-edit || true
+        if ! git diff --quiet; then
+          git push origin hosts
+        else
+          echo "No changes to push"
+        fi
     
     - name: Run host aggregation script
       run: |
