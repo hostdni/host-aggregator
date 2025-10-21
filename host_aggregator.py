@@ -255,13 +255,8 @@ def main():
     # Generate output filename
     output_filename = generate_output_filename()
 
-    # Determine output path based on environment
-    if os.getenv("GITHUB_ACTIONS"):
-        # Running in GitHub Actions - write to data directory
-        output_path = f"data/{output_filename}"
-    else:
-        # Running locally - write to current directory
-        output_path = output_filename
+    # Always write to data directory
+    output_path = f"data/{output_filename}"
 
     # Write CSV file
     write_csv(unique_entries, output_path)
