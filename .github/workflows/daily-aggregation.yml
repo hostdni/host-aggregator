@@ -26,25 +26,18 @@ jobs:
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
 
-    - name: Configure Git
+    - name: Configure Git and sync host branch with main branch using rebase
       run: |
-        git config user.name "HostDNIBot"
-        git config user.email "HostDNIBot@rapidrabbit.software"
-
-    - name: Fetch all branches
-      run: git fetch origin
-
-    - name: Checkout host branch
-      run: git checkout hosts
-
-    - name: Merge latest main into host branch
-      run: |
-        git merge origin/main --no-edit || true
-        if ! git diff --quiet; then
-          git push origin hosts
-        else
-          echo "No changes to push"
-        fi
+        git config --global user.name "HostDNIBot"
+        git config --global user.email "HostDNIBot@rapidrabbit.software"
+        
+        # Fetch all branches
+        git fetch origin
+        
+        # Ensure we're on hosts branch
+        git checkout hosts
+        git rebase main
+        
     
     - name: Run host aggregation script
       run: |
