@@ -26,6 +26,8 @@ jobs:
 
     - name: Switch to hosts branch and rebase from main
       run: |
+        git config --global user.email "action@github.com"
+        git config --global user.name "GitHub Action"
         git checkout hosts
         git rebase main
     
