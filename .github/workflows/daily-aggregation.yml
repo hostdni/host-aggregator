@@ -37,7 +37,15 @@ jobs:
         # Ensure we're on hosts branch
         git checkout hosts
         git fetch origin main
-        git rebase origin/main
+        git rebase origin/main || {
+          # If rebase fails due to conflicts, skip the problematic commit
+          echo "Rebase conflict detected, skipping problematic commit..."
+          git rebase --skip || {
+            echo "Still conflicts, aborting rebase and using merge instead"
+            git rebase --abort
+            git merge origin/main --no-edit
+          }
+        }
         
     
     - name: Run host aggregation script
