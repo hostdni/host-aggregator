@@ -12,10 +12,11 @@ jobs:
     container: python:3.10-slim
     
     steps:
-    - name: Checkout repository
+    - name: Checkout hosts branch
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        ref: hosts
         fetch-depth: 0
 
     - name: Install dependencies
@@ -24,12 +25,12 @@ jobs:
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
 
-    - name: Switch to hosts branch and rebase from main
+    - name: Rebase hosts branch from main
       run: |
         git config --global user.email "HostDNIBot@rapidrabbit.software"
         git config --global user.name "HostDNIBot"
-        git checkout hosts
-        git rebase main
+        git fetch origin main
+        git rebase origin/main
     
     - name: Run host aggregation script
       run: |
