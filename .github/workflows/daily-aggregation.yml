@@ -18,16 +18,16 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
 
-    - name: Install git and checkout hosts branch
+    - name: Install dependencies
       run: |
         apt-get update && apt-get install -y git
-        git checkout hosts
-        git rebase main
-
-    - name: Install Python dependencies
-      run: |
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
+
+    - name: Switch to hosts branch and rebase from main
+      run: |
+        git checkout hosts
+        git rebase main
     
     - name: Run host aggregation script
       run: |
@@ -47,10 +47,6 @@ jobs:
         else
           echo "changed=false" >> $GITHUB_OUTPUT
         fi
-    
-    - name: Switch to hosts branch
-      run: |
-        git checkout hosts
     
     - name: Commit and push changes to hosts branch
       if: steps.verify-changed-files.outputs.changed == 'true'
