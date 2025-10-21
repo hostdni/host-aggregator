@@ -24,10 +24,17 @@ jobs:
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
 
-    - name: Configure git user
+    - name: Update hosts branch with main changes
       run: |
         git config --global user.email "HostDNIBot@rapidrabbit.software"
         git config --global user.name "HostDNIBot"
+        git fetch origin main
+        # Use merge with strategy to prefer main branch for conflicts
+        git merge origin/main -X theirs --no-edit || {
+          # If merge still fails, reset to main and recreate hosts branch
+          echo "Merge failed, resetting hosts branch to match main"
+          git reset --hard origin/main
+        }
     
     - name: Run host aggregation script
       run: |
