@@ -49,10 +49,6 @@ HOST_SOURCES = {
 CSV_HEADERS = [
     "entry",
     "category",
-    "action",
-    "description",
-    "risk",
-    "is_enabled",
 ]
 
 
@@ -151,10 +147,6 @@ def parse_host_file(content: str, category: str) -> List[Dict[str, str]]:
                     entry = {
                         "entry": hostname,
                         "category": category,
-                        "action": "block",
-                        "description": f"Blocked {category.lower()} domain",
-                        "risk": "",
-                        "is_enabled": "True",
                     }
                     entries.append(entry)
 
