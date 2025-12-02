@@ -22,84 +22,56 @@ jobs:
       with:
         fetch-depth: 0  # Fetch all history for all branches
 
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+        cache: 'pip'
+    
     - name: Install dependencies
       run: |
-        sudo apt-get update && sudo apt-get install -y python3 python3-pip
-        python3 -m pip install --upgrade pip
-        pip3 install -r requirements.txt
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
     
     - name: Run host aggregation script
       run: |
-        python3 host_aggregator.py
+        python host_aggregator.py
     
     - name: Find generated files
       id: find-files
       run: |
-        # Find the timestamped CSV file (most recent)
-        TIMESTAMPED_CSV=$(find data/ -name "host_entries_*.csv" -type f | sort -r | head -n 1)
-        LATEST_CSV="data/latest.csv"
+        # Define formats to check
+        FORMATS=("csv" "json" "yaml")
         
-        # Find the timestamped JSON file (most recent)
-        TIMESTAMPED_JSON=$(find data/ -name "host_entries_*.json" -type f | sort -r | head -n 1)
-        LATEST_JSON="data/latest.json"
-        
-        # Find the timestamped YAML file (most recent)
-        TIMESTAMPED_YAML=$(find data/ -name "host_entries_*.yaml" -type f | sort -r | head -n 1)
-        LATEST_YAML="data/latest.yaml"
-        
-        if [ -z "$TIMESTAMPED_CSV" ]; then
-          echo "Error: No timestamped CSV file found"
-          exit 1
-        fi
-        
-        if [ ! -f "$LATEST_CSV" ]; then
-          echo "Error: latest.csv file not found"
-          exit 1
-        fi
-        
-        if [ -z "$TIMESTAMPED_JSON" ]; then
-          echo "Error: No timestamped JSON file found"
-          exit 1
-        fi
-        
-        if [ ! -f "$LATEST_JSON" ]; then
-          echo "Error: latest.json file not found"
-          exit 1
-        fi
-        
-        if [ -z "$TIMESTAMPED_YAML" ]; then
-          echo "Error: No timestamped YAML file found"
-          exit 1
-        fi
-        
-        if [ ! -f "$LATEST_YAML" ]; then
-          echo "Error: latest.yaml file not found"
-          exit 1
-        fi
-        
-        # Extract filename without path
-        TIMESTAMPED_CSV_FILENAME=$(basename "$TIMESTAMPED_CSV")
-        TIMESTAMPED_JSON_FILENAME=$(basename "$TIMESTAMPED_JSON")
-        TIMESTAMPED_YAML_FILENAME=$(basename "$TIMESTAMPED_YAML")
-        
-        echo "timestamped_csv=$TIMESTAMPED_CSV" >> $GITHUB_OUTPUT
-        echo "timestamped_csv_filename=$TIMESTAMPED_CSV_FILENAME" >> $GITHUB_OUTPUT
-        echo "latest_csv=$LATEST_CSV" >> $GITHUB_OUTPUT
-        
-        echo "timestamped_json=$TIMESTAMPED_JSON" >> $GITHUB_OUTPUT
-        echo "timestamped_json_filename=$TIMESTAMPED_JSON_FILENAME" >> $GITHUB_OUTPUT
-        echo "latest_json=$LATEST_JSON" >> $GITHUB_OUTPUT
-        
-        echo "timestamped_yaml=$TIMESTAMPED_YAML" >> $GITHUB_OUTPUT
-        echo "timestamped_yaml_filename=$TIMESTAMPED_YAML_FILENAME" >> $GITHUB_OUTPUT
-        echo "latest_yaml=$LATEST_YAML" >> $GITHUB_OUTPUT
-        
-        echo "Found timestamped CSV: $TIMESTAMPED_CSV"
-        echo "Found latest CSV: $LATEST_CSV"
-        echo "Found timestamped JSON: $TIMESTAMPED_JSON"
-        echo "Found latest JSON: $LATEST_JSON"
-        echo "Found timestamped YAML: $TIMESTAMPED_YAML"
-        echo "Found latest YAML: $LATEST_YAML"
+        # Find and validate files for each format
+        for FORMAT in "${FORMATS[@]}"; do
+          TIMESTAMPED_FILE=$(find data/ -name "host_entries_*.${FORMAT}" -type f | sort -r | head -n 1)
+          LATEST_FILE="data/latest.${FORMAT}"
+          
+          # Validate timestamped file
+          if [ -z "$TIMESTAMPED_FILE" ]; then
+            echo "Error: No timestamped ${FORMAT^^} file found"
+            exit 1
+          fi
+          
+          # Validate latest file
+          if [ ! -f "$LATEST_FILE" ]; then
+            echo "Error: latest.${FORMAT} file not found"
+            exit 1
+          fi
+          
+          # Extract filename without path
+          TIMESTAMPED_FILENAME=$(basename "$TIMESTAMPED_FILE")
+          
+          # Set output variables
+          echo "timestamped_${FORMAT}=$TIMESTAMPED_FILE" >> $GITHUB_OUTPUT
+          echo "timestamped_${FORMAT}_filename=$TIMESTAMPED_FILENAME" >> $GITHUB_OUTPUT
+          echo "latest_${FORMAT}=$LATEST_FILE" >> $GITHUB_OUTPUT
+          
+          # Log found files
+          echo "Found timestamped ${FORMAT^^}: $TIMESTAMPED_FILE"
+          echo "Found latest ${FORMAT^^}: $LATEST_FILE"
+        done
         
     - name: Commit generated files to hosts branch
       run: |
@@ -108,24 +80,14 @@ jobs:
         # Checkout hosts branch to commit changes to it
         git checkout $BRANCH_NAME
         
-        # Create data/csv directory if it doesn't exist
-        mkdir -p data/csv
+        # Create data directories for all formats
+        mkdir -p data/{csv,json,yaml}
         
-        # Create data/json directory if it doesn't exist
-        mkdir -p data/json
-
-        # Create data/yaml directory if it doesn't exist
-        mkdir -p data/yaml
-        
-        # Move CSV files to data/csv directory
+        # Move files to their respective directories
         mv ${{ steps.find-files.outputs.latest_csv }} data/csv/latest.csv
         mv ${{ steps.find-files.outputs.timestamped_csv }} data/csv/${{ steps.find-files.outputs.timestamped_csv_filename }}
-        
-        # Move JSON files to data/json directory
         mv ${{ steps.find-files.outputs.latest_json }} data/json/latest.json
         mv ${{ steps.find-files.outputs.timestamped_json }} data/json/${{ steps.find-files.outputs.timestamped_json_filename }}
-        
-        # Move YAML files to data/yaml directory
         mv ${{ steps.find-files.outputs.latest_yaml }} data/yaml/latest.yaml
         mv ${{ steps.find-files.outputs.timestamped_yaml }} data/yaml/${{ steps.find-files.outputs.timestamped_yaml_filename }}
                 
@@ -152,16 +114,12 @@ jobs:
         git checkout main
     
     - name: Prepare Pages deployment
-      # This step runs automatically via GitHub Actions (not locally)
-      # It prepares the CSV files for GitHub Pages deployment
       run: |
-        # Checkout hosts branch to get the committed CSV files
+        # Checkout hosts branch to get the committed files
         git checkout hosts
         
-        # Create build directory structure
+        # Create build directory and copy data directory
         mkdir -p build
-        
-        # Copy entire data/ directory from hosts branch to build directory
         cp -r data build/
         
         echo "Prepared files for GitHub Pages deployment from hosts branch"
@@ -187,16 +145,20 @@ jobs:
       
       - name: Display completion information
         run: |
+          BASE_URL="${{ steps.deployment.outputs.page_url }}"
+          TIMESTAMP_BASE="${{ needs.build.outputs.timestamped_filename }}"
           {
             echo "## Host Aggregation Complete"
             echo ""
-            echo "### CSV Files Generated:"
-            echo "- **Latest CSV**: \`data/csv/latest.csv\`"
-            echo "- **Timestamped CSV**: \`data/csv/${{ needs.build.outputs.timestamped_filename }}\`"
+            echo "### Files Generated:"
+            echo "- **CSV**: \`data/csv/latest.csv\`, \`data/csv/${TIMESTAMP_BASE}\`"
+            echo "- **JSON**: \`data/json/latest.json\`, \`data/json/${TIMESTAMP_BASE%.csv}.json\`"
+            echo "- **YAML**: \`data/yaml/latest.yaml\`, \`data/yaml/${TIMESTAMP_BASE%.csv}.yaml\`"
             echo ""
             echo "### GitHub Pages URLs:"
-            echo "- **Latest CSV**: \`${{ steps.deployment.outputs.page_url }}data/csv/latest.csv\`"
-            echo "- **Timestamped CSV**: \`${{ steps.deployment.outputs.page_url }}data/csv/${{ needs.build.outputs.timestamped_filename }}\`"
+            echo "- **Latest CSV**: \`${BASE_URL}data/csv/latest.csv\`"
+            echo "- **Latest JSON**: \`${BASE_URL}data/json/latest.json\`"
+            echo "- **Latest YAML**: \`${BASE_URL}data/yaml/latest.yaml\`"
             echo ""
             echo "Files have been deployed to GitHub Pages and are now accessible."
           } >> $GITHUB_STEP_SUMMARY

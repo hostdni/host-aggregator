@@ -2,9 +2,9 @@
 """
 Host Aggregator Script
 
-This script fetches host files from multiple sources and aggregates them into a
-single CSV dataset.
-Each run creates a new dataset with a timestamp.
+This script fetches host files from multiple sources and aggregates them into
+CSV, JSON, and YAML datasets.
+Each run creates new datasets with a timestamp.
 """
 
 import argparse
@@ -124,7 +124,7 @@ def parse_host_file(content: str, category: str) -> List[Dict[str, str]]:
     entries = []
     lines = content.split("\n")
 
-    for line_num, line in enumerate(lines, 1):
+    for line in lines:
         line = line.strip()
 
         # Skip empty lines and comments
@@ -147,11 +147,10 @@ def parse_host_file(content: str, category: str) -> List[Dict[str, str]]:
                         logger.debug(f"Filtered out system entry: {hostname}")
                         continue
                     
-                    entry = {
+                    entries.append({
                         "entry": hostname,
                         "category": category,
-                    }
-                    entries.append(entry)
+                    })
 
     logger.info(f"Parsed {len(entries)} entries from {category}")
     return entries
@@ -169,6 +168,7 @@ def deduplicate_entries(entries: List[Dict[str, str]]) -> List[Dict[str, str]]:
     """
     seen = set()
     unique_entries = []
+    duplicates_count = 0
 
     for entry in entries:
         hostname = entry["entry"]
@@ -176,12 +176,24 @@ def deduplicate_entries(entries: List[Dict[str, str]]) -> List[Dict[str, str]]:
             seen.add(hostname)
             unique_entries.append(entry)
         else:
+            duplicates_count += 1
             logger.debug(f"Duplicate entry found: {hostname}")
 
-    logger.info(
-        f"Removed {len(entries) - len(unique_entries)} duplicate entries"
-    )
+    if duplicates_count > 0:
+        logger.info(f"Removed {duplicates_count} duplicate entries")
     return unique_entries
+
+
+def _ensure_directory(output_path: str) -> None:
+    """
+    Ensure the directory for the output path exists.
+
+    Args:
+        output_path: Path to the output file
+    """
+    dir_path = os.path.dirname(output_path)
+    if dir_path:
+        os.makedirs(dir_path, exist_ok=True)
 
 
 def write_csv(entries: List[Dict[str, str]], output_path: str) -> None:
@@ -193,19 +205,12 @@ def write_csv(entries: List[Dict[str, str]], output_path: str) -> None:
         output_path: Path to write the CSV file
     """
     try:
-        # Only create directory if output_path has a directory component
-        dir_path = os.path.dirname(output_path)
-        if dir_path:
-            os.makedirs(dir_path, exist_ok=True)
-
+        _ensure_directory(output_path)
         with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=CSV_HEADERS)
             writer.writeheader()
             writer.writerows(entries)
-
-        logger.info(
-            f"Successfully wrote {len(entries)} entries to {output_path}"
-        )
+        logger.info(f"Successfully wrote {len(entries)} entries to {output_path}")
     except Exception as e:
         logger.error(f"Failed to write CSV file: {e}")
         raise
@@ -220,17 +225,10 @@ def write_json(entries: List[Dict[str, str]], output_path: str) -> None:
         output_path: Path to write the JSON file
     """
     try:
-        # Only create directory if output_path has a directory component
-        dir_path = os.path.dirname(output_path)
-        if dir_path:
-            os.makedirs(dir_path, exist_ok=True)
-
+        _ensure_directory(output_path)
         with open(output_path, "w", encoding="utf-8") as jsonfile:
             json.dump(entries, jsonfile, indent=2, ensure_ascii=False)
-
-        logger.info(
-            f"Successfully wrote {len(entries)} entries to {output_path}"
-        )
+        logger.info(f"Successfully wrote {len(entries)} entries to {output_path}")
     except Exception as e:
         logger.error(f"Failed to write JSON file: {e}")
         raise
@@ -245,34 +243,15 @@ def write_yaml(entries: List[Dict[str, str]], output_path: str) -> None:
         output_path: Path to write the YAML file
     """
     try:
-        # Only create directory if output_path has a directory component
-        dir_path = os.path.dirname(output_path)
-        if dir_path:
-            os.makedirs(dir_path, exist_ok=True)
-
+        _ensure_directory(output_path)
         with open(output_path, "w", encoding="utf-8") as yamlfile:
             yaml.dump(entries, yamlfile, default_flow_style=False, allow_unicode=True)
-
-        logger.info(
-            f"Successfully wrote {len(entries)} entries to {output_path}"
-        )
+        logger.info(f"Successfully wrote {len(entries)} entries to {output_path}")
     except Exception as e:
         logger.error(f"Failed to write YAML file: {e}")
         raise
 
 
-def generate_output_filename(extension: str = "csv") -> str:
-    """
-    Generate output filename with timestamp.
-
-    Args:
-        extension: File extension (csv, json, yaml)
-
-    Returns:
-        Filename with timestamp
-    """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"host_entries_{timestamp}.{extension}"
 
 
 def main():
@@ -313,36 +292,29 @@ def main():
     # Deduplicate entries
     unique_entries = deduplicate_entries(all_entries)
 
+    # Format writer mapping
+    format_writers = {
+        "csv": write_csv,
+        "json": write_json,
+        "yaml": write_yaml,
+    }
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_files = []
 
     # Generate files for each requested format
     for format_type in args.formats:
+        writer = format_writers[format_type]
+        
         # Generate timestamped filename
-        timestamped_filename = generate_output_filename(format_type)
+        timestamped_filename = f"host_entries_{timestamp}.{format_type}"
         timestamped_path = f"data/{timestamped_filename}"
-
-        # Write timestamped file
-        if format_type == "csv":
-            write_csv(unique_entries, timestamped_path)
-        elif format_type == "json":
-            write_json(unique_entries, timestamped_path)
-        elif format_type == "yaml":
-            write_yaml(unique_entries, timestamped_path)
-
+        writer(unique_entries, timestamped_path)
         output_files.append(timestamped_path)
 
         # Write latest file
-        latest_filename = f"latest.{format_type}"
-        latest_path = f"data/{latest_filename}"
-
-        if format_type == "csv":
-            write_csv(unique_entries, latest_path)
-        elif format_type == "json":
-            write_json(unique_entries, latest_path)
-        elif format_type == "yaml":
-            write_yaml(unique_entries, latest_path)
-
+        latest_path = f"data/latest.{format_type}"
+        writer(unique_entries, latest_path)
         output_files.append(latest_path)
 
     logger.info("Host aggregation completed successfully!")
