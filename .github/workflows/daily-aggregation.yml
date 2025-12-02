@@ -58,30 +58,20 @@ jobs:
         
         echo "Found timestamped file: $TIMESTAMPED_FILE"
         echo "Found latest file: $LATEST_FILE"
-    
-    - name: Checkout or create hosts branch
-      run: |
-        BRANCH_NAME="hosts"
         
-        # Fetch all branches
-        git fetch origin
-        
-        # Check if branch exists remotely
-        if git ls-remote --heads origin $BRANCH_NAME | grep -q $BRANCH_NAME; then
-          echo "Branch $BRANCH_NAME exists, checking it out"
-          git checkout -b $BRANCH_NAME origin/$BRANCH_NAME 2>/dev/null || git checkout $BRANCH_NAME
-        else
-          echo "Branch $BRANCH_NAME does not exist, creating it"
-          git checkout -b $BRANCH_NAME
-        fi
-    
     - name: Commit generated CSV files to hosts branch
       run: |
         BRANCH_NAME="hosts"
         
+        # Checkout hosts branch to commit changes to it
+        git checkout $BRANCH_NAME
+        
         # Create data/csv directory if it doesn't exist
         mkdir -p data/csv
         
+        # Create data/json directory if it doesn't exist
+        mkdir -p data/json
+
         # Copy CSV files to data/csv directory
         cp ${{ steps.find-csv.outputs.latest_file }} data/csv/latest.csv
         cp ${{ steps.find-csv.outputs.timestamped_file }} data/csv/${{ steps.find-csv.outputs.timestamped_filename }}
@@ -91,7 +81,7 @@ jobs:
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
         # Add files to git
-        git add data/csv/
+        git add .
         
         # Check if there are changes to commit
         if git diff --staged --quiet; then
