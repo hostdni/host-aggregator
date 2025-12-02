@@ -1,0 +1,108 @@
+name: Daily Host Aggregation
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    outputs:
+      timestamped_filename: ${{ steps.find-csv.outputs.timestamped_filename }}
+          
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for all branches
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update && sudo apt-get install -y python3 python3-pip
+        python3 -m pip install --upgrade pip
+        pip3 install -r requirements.txt
+    
+    - name: Run host aggregation script
+      run: |
+        python3 host_aggregator.py
+    
+    - name: Find generated CSV files
+      id: find-csv
+      run: |
+        # Find the timestamped CSV file (most recent)
+        TIMESTAMPED_FILE=$(find data/ -name "host_entries_*.csv" -type f | sort -r | head -n 1)
+        LATEST_FILE="data/latest.csv"
+        
+        if [ -z "$TIMESTAMPED_FILE" ]; then
+          echo "Error: No timestamped CSV file found"
+          exit 1
+        fi
+        
+        if [ ! -f "$LATEST_FILE" ]; then
+          echo "Error: latest.csv file not found"
+          exit 1
+        fi
+        
+        # Extract filename without path
+        TIMESTAMPED_FILENAME=$(basename "$TIMESTAMPED_FILE")
+        
+        echo "timestamped_file=$TIMESTAMPED_FILE" >> $GITHUB_OUTPUT
+        echo "timestamped_filename=$TIMESTAMPED_FILENAME" >> $GITHUB_OUTPUT
+        echo "latest_file=$LATEST_FILE" >> $GITHUB_OUTPUT
+        
+        echo "Found timestamped file: $TIMESTAMPED_FILE"
+        echo "Found latest file: $LATEST_FILE"
+    
+    - name: Prepare Pages deployment
+      # This step runs automatically via GitHub Actions (not locally)
+      # It prepares the CSV files for GitHub Pages deployment
+      run: |
+        # Create data/csv directory for Pages
+        mkdir -p build/data/csv
+        
+        # Copy CSV files to build directory
+        cp ${{ steps.find-csv.outputs.latest_file }} build/data/csv/latest.csv
+        cp ${{ steps.find-csv.outputs.timestamped_file }} build/data/csv/${{ steps.find-csv.outputs.timestamped_filename }}
+        
+        echo "Prepared files for GitHub Pages deployment"
+    
+    - name: Upload Pages artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: './build'
+    
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      
+      - name: Display completion information
+        run: |
+          {
+            echo "## Host Aggregation Complete"
+            echo ""
+            echo "### CSV Files Generated:"
+            echo "- **Latest CSV**: \`data/csv/latest.csv\`"
+            echo "- **Timestamped CSV**: \`data/csv/${{ needs.build.outputs.timestamped_filename }}\`"
+            echo ""
+            echo "### GitHub Pages URLs:"
+            echo "- **Latest CSV**: \`${{ steps.deployment.outputs.page_url }}data/csv/latest.csv\`"
+            echo "- **Timestamped CSV**: \`${{ steps.deployment.outputs.page_url }}data/csv/${{ needs.build.outputs.timestamped_filename }}\`"
+            echo ""
+            echo "Files have been deployed to GitHub Pages and are now accessible."
+          } >> $GITHUB_STEP_SUMMARY
