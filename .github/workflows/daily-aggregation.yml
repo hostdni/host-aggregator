@@ -6,72 +6,88 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch: # Allow manual triggering
 
+env:
+  # Artifact retention period in days (1-90 days, GitHub default is 90)
+  ARTIFACT_RETENTION_DAYS: 30
+
 jobs:
   aggregate-hosts:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
           
     steps:
-    - name: Checkout hosts branch
+    - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        ref: hosts
-        fetch-depth: 0
 
     - name: Install dependencies
       run: |
-        sudo apt-get update && sudo apt-get install -y git python3 python3-pip
+        sudo apt-get update && sudo apt-get install -y python3 python3-pip
         python3 -m pip install --upgrade pip
         pip3 install -r requirements.txt
-
-    - name: Configure Git and sync host branch with main branch using rebase
-      run: |
-        git config --global user.name "HostDNIBot"
-        git config --global user.email "HostDNIBot@rapidrabbit.software"
-        
-        # Fetch all branches
-        git fetch origin
-        
-        # Ensure we're on hosts branch
-        git checkout hosts
-        git fetch origin main
-        git rebase origin/main || {
-          # If rebase fails due to conflicts, skip the problematic commit
-          echo "Rebase conflict detected, skipping problematic commit..."
-          git rebase --skip || {
-            echo "Still conflicts, aborting rebase and using merge instead"
-            git rebase --abort
-            git merge origin/main --no-edit
-          }
-        }
-        
     
     - name: Run host aggregation script
       run: |
         python3 host_aggregator.py
     
-    - name: Clean up old timestamped files (keep last 30 days)
+    - name: Find generated CSV files
+      id: find-csv
       run: |
-        # Find and remove CSV files older than 30 days
-        find data/ -name "host_entries_*.csv" -type f -mtime +30 -delete
-        echo "Cleaned up CSV files older than 30 days"
-    
-    - name: Check for changes
-      id: verify-changed-files
-      run: |
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "changed=true" >> $GITHUB_OUTPUT
-        else
-          echo "changed=false" >> $GITHUB_OUTPUT
+        # Find the timestamped CSV file (most recent)
+        TIMESTAMPED_FILE=$(find data/ -name "host_entries_*.csv" -type f | sort -r | head -n 1)
+        LATEST_FILE="data/latest.csv"
+        
+        if [ -z "$TIMESTAMPED_FILE" ]; then
+          echo "Error: No timestamped CSV file found"
+          exit 1
         fi
+        
+        if [ ! -f "$LATEST_FILE" ]; then
+          echo "Error: latest.csv file not found"
+          exit 1
+        fi
+        
+        # Extract filename without path for artifact naming
+        TIMESTAMPED_FILENAME=$(basename "$TIMESTAMPED_FILE")
+        
+        echo "timestamped_file=$TIMESTAMPED_FILE" >> $GITHUB_OUTPUT
+        echo "timestamped_filename=$TIMESTAMPED_FILENAME" >> $GITHUB_OUTPUT
+        echo "latest_file=$LATEST_FILE" >> $GITHUB_OUTPUT
+        
+        echo "Found timestamped file: $TIMESTAMPED_FILE"
+        echo "Found latest file: $LATEST_FILE"
     
-    - name: Commit and push changes to hosts branch
-      if: steps.verify-changed-files.outputs.changed == 'true'
+    - name: Upload timestamped CSV as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.find-csv.outputs.timestamped_filename }}
+        path: ${{ steps.find-csv.outputs.timestamped_file }}
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+    
+    - name: Upload latest CSV as artifact (alias)
+      uses: actions/upload-artifact@v4
+      with:
+        name: latest
+        path: ${{ steps.find-csv.outputs.latest_file }}
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+    
+    - name: Display artifact access information
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add data/
-        git commit -m "Update host entries - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-        git push origin hosts
+        echo "## Artifact Upload Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Artifacts Available:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Latest CSV (alias)**: \`latest\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamped CSV**: \`${{ steps.find-csv.outputs.timestamped_filename }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Access Artifacts:" >> $GITHUB_STEP_SUMMARY
+        echo "1. Navigate to this workflow run: \`${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "2. Scroll down to the **Artifacts** section" >> $GITHUB_STEP_SUMMARY
+        echo "3. Download the artifact you need" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Human-Friendly Artifact Paths:" >> $GITHUB_STEP_SUMMARY
+        echo "- Latest CSV: \`${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\` (download \`latest\` artifact)" >> $GITHUB_STEP_SUMMARY
+        echo "- Timestamped CSV: \`${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\` (download \`${{ steps.find-csv.outputs.timestamped_filename }}\` artifact)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Note**: Artifacts will be automatically purged after ${{ env.ARTIFACT_RETENTION_DAYS }} days." >> $GITHUB_STEP_SUMMARY

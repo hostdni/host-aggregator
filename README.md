@@ -8,8 +8,9 @@ A GitHub CI/CD pipeline that runs daily to aggregate host entries from multiple 
 - **Multiple Sources**: Aggregates from 5 different host file categories
 - **CSV Output**: Creates structured CSV files with standardized columns
 - **Deduplication**: Removes duplicate entries across sources
-- **Version Control**: Each run creates a timestamped dataset
-- **Latest File**: Always maintains a `latest.csv` for easy access
+- **Artifact Storage**: Each run creates a timestamped dataset stored as GitHub Actions artifacts
+- **Latest Alias**: Always maintains a `latest` artifact that points to the most recent CSV
+- **Automatic Cleanup**: Artifacts are automatically purged after a configurable retention period (default: 30 days)
 
 ## Host Sources
 
@@ -84,36 +85,87 @@ The generated CSV files contain the following columns:
 
 2. **Manual Trigger**: You can manually trigger the workflow from the GitHub Actions tab.
 
-3. **Access Data**: Generated CSV files are available in the `data/` directory on the `hosts` branch and can be accessed via:
-   ```
-   https://raw.githubusercontent.com/<username>/<repo>/hosts/data/latest.csv
-   ```
+3. **Access Data**: Generated CSV files are available as GitHub Actions artifacts:
+   - Navigate to the workflow run: `https://github.com/<username>/<repo>/actions/runs/<run_id>`
+   - Download the `latest` artifact for the most recent CSV
+   - Download the timestamped artifact (e.g., `host_entries_YYYYMMDD_HHMMSS.csv`) for historical data
 
 ## Usage
 
 ### Accessing the Latest Dataset
 
-The latest aggregated dataset is always available at:
+The latest aggregated dataset is available as a GitHub Actions artifact named `latest`:
+
+**Via GitHub UI:**
+1. Go to the [Actions tab](https://github.com/<username>/<repo>/actions) in your repository
+2. Click on the most recent workflow run
+3. Scroll down to the **Artifacts** section
+4. Download the `latest` artifact
+
+**Human-Friendly Artifact Path:**
 ```
-https://raw.githubusercontent.com/<username>/<repo>/hosts/data/latest.csv
+https://github.com/<username>/<repo>/actions/runs/<run_id>
 ```
+(Replace `<run_id>` with the actual workflow run ID, or navigate via the Actions tab)
 
 ### Programmatic Access
 
+**Using GitHub API:**
 ```python
-import pandas as pd
 import requests
+import pandas as pd
+from io import StringIO
 
-# Load the latest dataset
-url = "https://raw.githubusercontent.com/<username>/<repo>/hosts/data/latest.csv"
-df = pd.read_csv(url)
+# GitHub API endpoint to list artifacts
+owner = "<username>"
+repo = "<repo-name>"
+token = "<your-github-token>"  # Optional, but recommended for rate limits
 
-# Filter by category
-adware_domains = df[df['category'] == 'Adware & Malware']['entry'].tolist()
+# Get the latest workflow run
+headers = {"Authorization": f"token {token}"} if token else {}
+runs_url = f"https://api.github.com/repos/{owner}/{repo}/actions/runs"
+runs_response = requests.get(runs_url, headers=headers)
+runs_data = runs_response.json()
 
-# Get all blocked domains
-blocked_domains = df[df['action'] == 'block']['entry'].tolist()
+# Get the most recent successful run
+latest_run = next(
+    (run for run in runs_data["workflow_runs"] if run["status"] == "completed"),
+    None
+)
+
+if latest_run:
+    # Get artifacts for this run
+    artifacts_url = latest_run["artifacts_url"]
+    artifacts_response = requests.get(artifacts_url, headers=headers)
+    artifacts_data = artifacts_response.json()
+    
+    # Find the 'latest' artifact
+    latest_artifact = next(
+        (a for a in artifacts_data["artifacts"] if a["name"] == "latest"),
+        None
+    )
+    
+    if latest_artifact:
+        # Download the artifact
+        download_url = latest_artifact["archive_download_url"]
+        download_response = requests.get(download_url, headers=headers)
+        
+        # Extract and load CSV (artifacts are zipped)
+        import zipfile
+        from io import BytesIO
+        
+        with zipfile.ZipFile(BytesIO(download_response.content)) as z:
+            with z.open("latest.csv") as f:
+                df = pd.read_csv(f)
+        
+        # Filter by category
+        adware_domains = df[df['category'] == 'Adware & Malware']['entry'].tolist()
+        
+        # Get all entries
+        all_domains = df['entry'].tolist()
 ```
+
+**Note**: For easier programmatic access, consider downloading artifacts manually or using the GitHub CLI (`gh`).
 
 ### Using with Host Files
 
@@ -150,36 +202,25 @@ with open('custom_hosts.txt', 'w') as f:
 2. **Parse**: Extracts hostnames from each file
 3. **Deduplicate**: Removes duplicate entries
 4. **Generate**: Creates timestamped CSV file
-5. **Update**: Updates `latest.csv` file
-6. **Cleanup**: Removes timestamped files older than 30 days
-7. **Branch**: Switches to `hosts` branch
-8. **Commit**: Commits changes to `hosts` branch
+5. **Upload**: Uploads timestamped CSV as artifact
+6. **Upload Latest**: Uploads `latest.csv` as `latest` artifact (alias)
+7. **Auto-Cleanup**: GitHub automatically purges artifacts after retention period
 
 ### Output Files
 
-- `data/host_entries_YYYYMMDD_HHMMSS.csv` - Timestamped dataset (kept for 30 days)
-- `data/latest.csv` - Latest dataset (always current, never deleted)
+All CSV files are stored as GitHub Actions artifacts:
 
-### Branch Structure
-
-The repository uses a **dual-branch approach**:
-
-- **`main` branch**: Contains source code, documentation, and CI/CD configuration
-- **`hosts` branch**: Contains only the generated CSV data files
-
-**Benefits:**
-- **Clean separation** between code and data
-- **Easier data access** via raw GitHub URLs
-- **Reduced main branch clutter** from daily CSV commits
-- **Better performance** for data consumers (smaller branch)
+- **`host_entries_YYYYMMDD_HHMMSS.csv`** - Timestamped artifact (auto-purged after retention period)
+- **`latest`** - Artifact alias that always points to the most recent CSV
 
 ### Storage Management
 
 The system automatically manages storage by:
-- **Retention Policy**: Keeps only the last 30 days of timestamped files
-- **Automatic Cleanup**: Removes files older than 30 days during each run
-- **Latest File**: Always maintains `latest.csv` regardless of age
-- **Repository Size**: Prevents unlimited growth of the repository
+- **Retention Policy**: Artifacts are kept for a configurable period (default: 30 days, max: 90 days)
+- **Automatic Cleanup**: GitHub automatically purges artifacts after the retention period expires
+- **Latest Alias**: The `latest` artifact is always available and points to the most recent CSV
+- **Repository Size**: No commits to repository, keeping it clean and lightweight
+- **Artifact Limits**: GitHub provides generous artifact storage (10 GB for free tier)
 
 ## Customization
 
@@ -213,14 +254,15 @@ schedule:
 
 ### Modifying Retention Period
 
-Change the retention period by modifying the cleanup step in `.github/workflows/daily-aggregation.yml`:
+Change the retention period by modifying the `ARTIFACT_RETENTION_DAYS` environment variable in `.github/workflows/daily-aggregation.yml`:
 
 ```yaml
-- name: Clean up old timestamped files (keep last 30 days)
-  run: |
-    # Change +30 to desired retention period (in days)
-    find data/ -name "host_entries_*.csv" -type f -mtime +30 -delete
+env:
+  # Artifact retention period in days (1-90 days, GitHub default is 90)
+  ARTIFACT_RETENTION_DAYS: 30  # Change this value (1-90)
 ```
+
+**Note**: The retention period can be set between 1 and 90 days. Artifacts older than this period will be automatically purged by GitHub.
 
 ## Monitoring
 
@@ -242,7 +284,8 @@ Change the retention period by modifying the cleanup step in `.github/workflows/
 
 1. **Network Timeouts**: Increase timeout in `fetch_host_file()`
 2. **Parsing Errors**: Check host file format changes
-3. **Git Push Failures**: Verify GitHub token permissions
+3. **Artifact Upload Failures**: Check GitHub Actions storage limits and permissions
+4. **Artifact Not Found**: Verify the workflow run completed successfully and artifacts were uploaded
 
 ### Debug Mode
 
