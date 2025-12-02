@@ -32,32 +32,64 @@ jobs:
       run: |
         python3 host_aggregator.py
     
-    - name: Find generated CSV files
-      id: find-csv
+    - name: Find generated files
+      id: find-files
       run: |
         # Find the timestamped CSV file (most recent)
-        TIMESTAMPED_FILE=$(find data/ -name "host_entries_*.csv" -type f | sort -r | head -n 1)
-        LATEST_FILE="data/latest.csv"
+        TIMESTAMPED_CSV=$(find data/ -name "host_entries_*.csv" -type f | sort -r | head -n 1)
+        LATEST_CSV="data/latest.csv"
         
-        if [ -z "$TIMESTAMPED_FILE" ]; then
+        # Find the timestamped JSON file (most recent)
+        TIMESTAMPED_JSON=$(find data/ -name "host_entries_*.json" -type f | sort -r | head -n 1)
+        LATEST_JSON="data/latest.json"
+        
+        # Find the timestamped YAML file (most recent)
+        TIMESTAMPED_YAML=$(find data/ -name "host_entries_*.yaml" -type f | sort -r | head -n 1)
+        LATEST_YAML="data/latest.yaml"
+        
+        if [ -z "$TIMESTAMPED_CSV" ]; then
           echo "Error: No timestamped CSV file found"
           exit 1
         fi
         
-        if [ ! -f "$LATEST_FILE" ]; then
+        if [ ! -f "$LATEST_CSV" ]; then
           echo "Error: latest.csv file not found"
           exit 1
         fi
         
         # Extract filename without path
-        TIMESTAMPED_FILENAME=$(basename "$TIMESTAMPED_FILE")
+        TIMESTAMPED_CSV_FILENAME=$(basename "$TIMESTAMPED_CSV")
+        TIMESTAMPED_JSON_FILENAME=$(basename "$TIMESTAMPED_JSON" 2>/dev/null || echo "")
+        TIMESTAMPED_YAML_FILENAME=$(basename "$TIMESTAMPED_YAML" 2>/dev/null || echo "")
         
-        echo "timestamped_file=$TIMESTAMPED_FILE" >> $GITHUB_OUTPUT
-        echo "timestamped_filename=$TIMESTAMPED_FILENAME" >> $GITHUB_OUTPUT
-        echo "latest_file=$LATEST_FILE" >> $GITHUB_OUTPUT
+        echo "timestamped_csv=$TIMESTAMPED_CSV" >> $GITHUB_OUTPUT
+        echo "timestamped_csv_filename=$TIMESTAMPED_CSV_FILENAME" >> $GITHUB_OUTPUT
+        echo "latest_csv=$LATEST_CSV" >> $GITHUB_OUTPUT
         
-        echo "Found timestamped file: $TIMESTAMPED_FILE"
-        echo "Found latest file: $LATEST_FILE"
+        if [ -n "$TIMESTAMPED_JSON" ] && [ -f "$TIMESTAMPED_JSON" ]; then
+          echo "timestamped_json=$TIMESTAMPED_JSON" >> $GITHUB_OUTPUT
+          echo "timestamped_json_filename=$TIMESTAMPED_JSON_FILENAME" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ -f "$LATEST_JSON" ]; then
+          echo "latest_json=$LATEST_JSON" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ -n "$TIMESTAMPED_YAML" ] && [ -f "$TIMESTAMPED_YAML" ]; then
+          echo "timestamped_yaml=$TIMESTAMPED_YAML" >> $GITHUB_OUTPUT
+          echo "timestamped_yaml_filename=$TIMESTAMPED_YAML_FILENAME" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ -f "$LATEST_YAML" ]; then
+          echo "latest_yaml=$LATEST_YAML" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "Found timestamped CSV: $TIMESTAMPED_CSV"
+        echo "Found latest CSV: $LATEST_CSV"
+        [ -n "$TIMESTAMPED_JSON" ] && echo "Found timestamped JSON: $TIMESTAMPED_JSON"
+        [ -f "$LATEST_JSON" ] && echo "Found latest JSON: $LATEST_JSON"
+        [ -n "$TIMESTAMPED_YAML" ] && echo "Found timestamped YAML: $TIMESTAMPED_YAML"
+        [ -f "$LATEST_YAML" ] && echo "Found latest YAML: $LATEST_YAML"
         
     - name: Commit generated CSV files to hosts branch
       run: |
@@ -72,6 +104,9 @@ jobs:
         # Create data/json directory if it doesn't exist
         mkdir -p data/json
 
+        # Create data/yaml directory if it doesn't exist
+        mkdir -p data/yaml
+        
         # Copy CSV files to data/csv directory
         mv ${{ steps.find-csv.outputs.latest_file }} data/csv/latest.csv
         mv ${{ steps.find-csv.outputs.timestamped_file }} data/csv/${{ steps.find-csv.outputs.timestamped_filename }}
