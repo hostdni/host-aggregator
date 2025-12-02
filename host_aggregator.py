@@ -14,7 +14,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Dict, List, Set
+from typing import Dict, List
 
 import requests
 import yaml
@@ -211,21 +211,87 @@ def write_csv(entries: List[Dict[str, str]], output_path: str) -> None:
         raise
 
 
-def generate_output_filename() -> str:
+def write_json(entries: List[Dict[str, str]], output_path: str) -> None:
+    """
+    Write entries to JSON file.
+
+    Args:
+        entries: List of host entry dictionaries
+        output_path: Path to write the JSON file
+    """
+    try:
+        # Only create directory if output_path has a directory component
+        dir_path = os.path.dirname(output_path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+
+        with open(output_path, "w", encoding="utf-8") as jsonfile:
+            json.dump(entries, jsonfile, indent=2, ensure_ascii=False)
+
+        logger.info(
+            f"Successfully wrote {len(entries)} entries to {output_path}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to write JSON file: {e}")
+        raise
+
+
+def write_yaml(entries: List[Dict[str, str]], output_path: str) -> None:
+    """
+    Write entries to YAML file.
+
+    Args:
+        entries: List of host entry dictionaries
+        output_path: Path to write the YAML file
+    """
+    try:
+        # Only create directory if output_path has a directory component
+        dir_path = os.path.dirname(output_path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+
+        with open(output_path, "w", encoding="utf-8") as yamlfile:
+            yaml.dump(entries, yamlfile, default_flow_style=False, allow_unicode=True)
+
+        logger.info(
+            f"Successfully wrote {len(entries)} entries to {output_path}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to write YAML file: {e}")
+        raise
+
+
+def generate_output_filename(extension: str = "csv") -> str:
     """
     Generate output filename with timestamp.
+
+    Args:
+        extension: File extension (csv, json, yaml)
 
     Returns:
         Filename with timestamp
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"host_entries_{timestamp}.csv"
+    return f"host_entries_{timestamp}.{extension}"
 
 
 def main():
     """
     Main function to orchestrate the host aggregation process.
     """
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="Aggregate host files from multiple sources into CSV, JSON, and YAML formats"
+    )
+    parser.add_argument(
+        "--formats",
+        nargs="+",
+        choices=["csv", "json", "yaml"],
+        default=["csv", "json", "yaml"],
+        help="Output formats to generate. Can specify multiple formats (e.g., --formats csv json). Default: all formats (csv, json, yaml)",
+    )
+    args = parser.parse_args()
+
     logger.info("Starting host aggregation process")
 
     all_entries = []
@@ -247,23 +313,42 @@ def main():
     # Deduplicate entries
     unique_entries = deduplicate_entries(all_entries)
 
-    # Generate output filename
-    output_filename = generate_output_filename()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_files = []
 
-    # Always write to data directory
-    output_path = f"data/{output_filename}"
+    # Generate files for each requested format
+    for format_type in args.formats:
+        # Generate timestamped filename
+        timestamped_filename = generate_output_filename(format_type)
+        timestamped_path = f"data/{timestamped_filename}"
 
-    # Write CSV file
-    write_csv(unique_entries, output_path)
+        # Write timestamped file
+        if format_type == "csv":
+            write_csv(unique_entries, timestamped_path)
+        elif format_type == "json":
+            write_json(unique_entries, timestamped_path)
+        elif format_type == "yaml":
+            write_yaml(unique_entries, timestamped_path)
 
-    # Also write a latest.csv file for easy access
-    latest_path = output_path.replace(output_filename, "latest.csv")
-    write_csv(unique_entries, latest_path)
+        output_files.append(timestamped_path)
+
+        # Write latest file
+        latest_filename = f"latest.{format_type}"
+        latest_path = f"data/{latest_filename}"
+
+        if format_type == "csv":
+            write_csv(unique_entries, latest_path)
+        elif format_type == "json":
+            write_json(unique_entries, latest_path)
+        elif format_type == "yaml":
+            write_yaml(unique_entries, latest_path)
+
+        output_files.append(latest_path)
 
     logger.info("Host aggregation completed successfully!")
     logger.info(f"Total entries processed: {len(all_entries)}")
     logger.info(f"Unique entries: {len(unique_entries)}")
-    logger.info(f"Output files: {output_path}, {latest_path}")
+    logger.info(f"Output files: {', '.join(output_files)}")
 
 
 if __name__ == "__main__":
