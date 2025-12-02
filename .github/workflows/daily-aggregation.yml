@@ -76,12 +76,15 @@ jobs:
         cp ${{ steps.find-csv.outputs.latest_file }} data/csv/latest.csv
         cp ${{ steps.find-csv.outputs.timestamped_file }} data/csv/${{ steps.find-csv.outputs.timestamped_filename }}
         
+        # Remove any CSV files from base data/ directory (only keep in data/csv/)
+        rm -f data/*.csv 2>/dev/null || true
+        
         # Configure git user
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Add files to git
-        git add .
+        # Only add files from data/csv/ directory
+        git add data/csv/
         
         # Check if there are changes to commit
         if git diff --staged --quiet; then
