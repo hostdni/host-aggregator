@@ -57,47 +57,49 @@ jobs:
           exit 1
         fi
         
+        if [ -z "$TIMESTAMPED_JSON" ]; then
+          echo "Error: No timestamped JSON file found"
+          exit 1
+        fi
+        
+        if [ ! -f "$LATEST_JSON" ]; then
+          echo "Error: latest.json file not found"
+          exit 1
+        fi
+        
+        if [ -z "$TIMESTAMPED_YAML" ]; then
+          echo "Error: No timestamped YAML file found"
+          exit 1
+        fi
+        
+        if [ ! -f "$LATEST_YAML" ]; then
+          echo "Error: latest.yaml file not found"
+          exit 1
+        fi
+        
         # Extract filename without path
         TIMESTAMPED_CSV_FILENAME=$(basename "$TIMESTAMPED_CSV")
-        TIMESTAMPED_JSON_FILENAME=$(basename "$TIMESTAMPED_JSON" 2>/dev/null || echo "")
-        TIMESTAMPED_YAML_FILENAME=$(basename "$TIMESTAMPED_YAML" 2>/dev/null || echo "")
+        TIMESTAMPED_JSON_FILENAME=$(basename "$TIMESTAMPED_JSON")
+        TIMESTAMPED_YAML_FILENAME=$(basename "$TIMESTAMPED_YAML")
         
         echo "timestamped_csv=$TIMESTAMPED_CSV" >> $GITHUB_OUTPUT
         echo "timestamped_csv_filename=$TIMESTAMPED_CSV_FILENAME" >> $GITHUB_OUTPUT
         echo "latest_csv=$LATEST_CSV" >> $GITHUB_OUTPUT
         
-        if [ -n "$TIMESTAMPED_JSON" ] && [ -f "$TIMESTAMPED_JSON" ]; then
-          echo "timestamped_json=$TIMESTAMPED_JSON" >> $GITHUB_OUTPUT
-          echo "timestamped_json_filename=$TIMESTAMPED_JSON_FILENAME" >> $GITHUB_OUTPUT
-        fi
+        echo "timestamped_json=$TIMESTAMPED_JSON" >> $GITHUB_OUTPUT
+        echo "timestamped_json_filename=$TIMESTAMPED_JSON_FILENAME" >> $GITHUB_OUTPUT
+        echo "latest_json=$LATEST_JSON" >> $GITHUB_OUTPUT
         
-        if [ -f "$LATEST_JSON" ]; then
-          echo "latest_json=$LATEST_JSON" >> $GITHUB_OUTPUT
-        fi
-        
-        if [ -n "$TIMESTAMPED_YAML" ] && [ -f "$TIMESTAMPED_YAML" ]; then
-          echo "timestamped_yaml=$TIMESTAMPED_YAML" >> $GITHUB_OUTPUT
-          echo "timestamped_yaml_filename=$TIMESTAMPED_YAML_FILENAME" >> $GITHUB_OUTPUT
-        fi
-        
-        if [ -f "$LATEST_YAML" ]; then
-          echo "latest_yaml=$LATEST_YAML" >> $GITHUB_OUTPUT
-        fi
+        echo "timestamped_yaml=$TIMESTAMPED_YAML" >> $GITHUB_OUTPUT
+        echo "timestamped_yaml_filename=$TIMESTAMPED_YAML_FILENAME" >> $GITHUB_OUTPUT
+        echo "latest_yaml=$LATEST_YAML" >> $GITHUB_OUTPUT
         
         echo "Found timestamped CSV: $TIMESTAMPED_CSV"
         echo "Found latest CSV: $LATEST_CSV"
-        if [ -n "$TIMESTAMPED_JSON" ] && [ -f "$TIMESTAMPED_JSON" ]; then
-          echo "Found timestamped JSON: $TIMESTAMPED_JSON"
-        fi
-        if [ -f "$LATEST_JSON" ]; then
-          echo "Found latest JSON: $LATEST_JSON"
-        fi
-        if [ -n "$TIMESTAMPED_YAML" ] && [ -f "$TIMESTAMPED_YAML" ]; then
-          echo "Found timestamped YAML: $TIMESTAMPED_YAML"
-        fi
-        if [ -f "$LATEST_YAML" ]; then
-          echo "Found latest YAML: $LATEST_YAML"
-        fi
+        echo "Found timestamped JSON: $TIMESTAMPED_JSON"
+        echo "Found latest JSON: $LATEST_JSON"
+        echo "Found timestamped YAML: $TIMESTAMPED_YAML"
+        echo "Found latest YAML: $LATEST_YAML"
         
     - name: Commit generated files to hosts branch
       run: |
@@ -119,33 +121,13 @@ jobs:
         mv ${{ steps.find-files.outputs.latest_csv }} data/csv/latest.csv
         mv ${{ steps.find-files.outputs.timestamped_csv }} data/csv/${{ steps.find-files.outputs.timestamped_csv_filename }}
         
-        # Move JSON files to data/json directory if they exist
-        if [ -n "${{ steps.find-files.outputs.latest_json }}" ]; then
-          LATEST_JSON="${{ steps.find-files.outputs.latest_json }}"
-          if [ -f "$LATEST_JSON" ]; then
-            mv "$LATEST_JSON" data/json/latest.json
-          fi
-        fi
-        if [ -n "${{ steps.find-files.outputs.timestamped_json }}" ] && [ -n "${{ steps.find-files.outputs.timestamped_json_filename }}" ]; then
-          TIMESTAMPED_JSON="${{ steps.find-files.outputs.timestamped_json }}"
-          if [ -f "$TIMESTAMPED_JSON" ]; then
-            mv "$TIMESTAMPED_JSON" data/json/${{ steps.find-files.outputs.timestamped_json_filename }}
-          fi
-        fi
+        # Move JSON files to data/json directory
+        mv ${{ steps.find-files.outputs.latest_json }} data/json/latest.json
+        mv ${{ steps.find-files.outputs.timestamped_json }} data/json/${{ steps.find-files.outputs.timestamped_json_filename }}
         
-        # Move YAML files to data/yaml directory if they exist
-        if [ -n "${{ steps.find-files.outputs.latest_yaml }}" ]; then
-          LATEST_YAML="${{ steps.find-files.outputs.latest_yaml }}"
-          if [ -f "$LATEST_YAML" ]; then
-            mv "$LATEST_YAML" data/yaml/latest.yaml
-          fi
-        fi
-        if [ -n "${{ steps.find-files.outputs.timestamped_yaml }}" ] && [ -n "${{ steps.find-files.outputs.timestamped_yaml_filename }}" ]; then
-          TIMESTAMPED_YAML="${{ steps.find-files.outputs.timestamped_yaml }}"
-          if [ -f "$TIMESTAMPED_YAML" ]; then
-            mv "$TIMESTAMPED_YAML" data/yaml/${{ steps.find-files.outputs.timestamped_yaml_filename }}
-          fi
-        fi
+        # Move YAML files to data/yaml directory
+        mv ${{ steps.find-files.outputs.latest_yaml }} data/yaml/latest.yaml
+        mv ${{ steps.find-files.outputs.timestamped_yaml }} data/yaml/${{ steps.find-files.outputs.timestamped_yaml_filename }}
                 
         # Configure git user
         git config user.name "github-actions[bot]"
