@@ -14,7 +14,7 @@ jobs:
       pages: write
       id-token: write
     outputs:
-      timestamped_filename: ${{ steps.find-csv.outputs.timestamped_filename }}
+      timestamped_filename: ${{ steps.find-files.outputs.timestamped_csv_filename }}
           
     steps:
     - name: Checkout repository
@@ -86,12 +86,20 @@ jobs:
         
         echo "Found timestamped CSV: $TIMESTAMPED_CSV"
         echo "Found latest CSV: $LATEST_CSV"
-        [ -n "$TIMESTAMPED_JSON" ] && echo "Found timestamped JSON: $TIMESTAMPED_JSON"
-        [ -f "$LATEST_JSON" ] && echo "Found latest JSON: $LATEST_JSON"
-        [ -n "$TIMESTAMPED_YAML" ] && echo "Found timestamped YAML: $TIMESTAMPED_YAML"
-        [ -f "$LATEST_YAML" ] && echo "Found latest YAML: $LATEST_YAML"
+        if [ -n "$TIMESTAMPED_JSON" ] && [ -f "$TIMESTAMPED_JSON" ]; then
+          echo "Found timestamped JSON: $TIMESTAMPED_JSON"
+        fi
+        if [ -f "$LATEST_JSON" ]; then
+          echo "Found latest JSON: $LATEST_JSON"
+        fi
+        if [ -n "$TIMESTAMPED_YAML" ] && [ -f "$TIMESTAMPED_YAML" ]; then
+          echo "Found timestamped YAML: $TIMESTAMPED_YAML"
+        fi
+        if [ -f "$LATEST_YAML" ]; then
+          echo "Found latest YAML: $LATEST_YAML"
+        fi
         
-    - name: Commit generated CSV files to hosts branch
+    - name: Commit generated files to hosts branch
       run: |
         BRANCH_NAME="hosts"
         
@@ -107,27 +115,55 @@ jobs:
         # Create data/yaml directory if it doesn't exist
         mkdir -p data/yaml
         
-        # Copy CSV files to data/csv directory
-        mv ${{ steps.find-csv.outputs.latest_file }} data/csv/latest.csv
-        mv ${{ steps.find-csv.outputs.timestamped_file }} data/csv/${{ steps.find-csv.outputs.timestamped_filename }}
+        # Move CSV files to data/csv directory
+        mv ${{ steps.find-files.outputs.latest_csv }} data/csv/latest.csv
+        mv ${{ steps.find-files.outputs.timestamped_csv }} data/csv/${{ steps.find-files.outputs.timestamped_csv_filename }}
+        
+        # Move JSON files to data/json directory if they exist
+        if [ -n "${{ steps.find-files.outputs.latest_json }}" ]; then
+          LATEST_JSON="${{ steps.find-files.outputs.latest_json }}"
+          if [ -f "$LATEST_JSON" ]; then
+            mv "$LATEST_JSON" data/json/latest.json
+          fi
+        fi
+        if [ -n "${{ steps.find-files.outputs.timestamped_json }}" ] && [ -n "${{ steps.find-files.outputs.timestamped_json_filename }}" ]; then
+          TIMESTAMPED_JSON="${{ steps.find-files.outputs.timestamped_json }}"
+          if [ -f "$TIMESTAMPED_JSON" ]; then
+            mv "$TIMESTAMPED_JSON" data/json/${{ steps.find-files.outputs.timestamped_json_filename }}
+          fi
+        fi
+        
+        # Move YAML files to data/yaml directory if they exist
+        if [ -n "${{ steps.find-files.outputs.latest_yaml }}" ]; then
+          LATEST_YAML="${{ steps.find-files.outputs.latest_yaml }}"
+          if [ -f "$LATEST_YAML" ]; then
+            mv "$LATEST_YAML" data/yaml/latest.yaml
+          fi
+        fi
+        if [ -n "${{ steps.find-files.outputs.timestamped_yaml }}" ] && [ -n "${{ steps.find-files.outputs.timestamped_yaml_filename }}" ]; then
+          TIMESTAMPED_YAML="${{ steps.find-files.outputs.timestamped_yaml }}"
+          if [ -f "$TIMESTAMPED_YAML" ]; then
+            mv "$TIMESTAMPED_YAML" data/yaml/${{ steps.find-files.outputs.timestamped_yaml_filename }}
+          fi
+        fi
                 
         # Configure git user
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Only add files from data/csv/ directory
-        git add data/csv/
+        # Add files from data directories
+        git add data/csv/ data/json/ data/yaml/
         
         # Check if there are changes to commit
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
           # Commit the changes
-          git commit -m "Update CSV files: ${{ steps.find-csv.outputs.timestamped_filename }}"
+          git commit -m "Update files: ${{ steps.find-files.outputs.timestamped_csv_filename }}"
           
           # Push to hosts branch
           git push origin $BRANCH_NAME
-          echo "Committed and pushed CSV files to hosts branch"
+          echo "Committed and pushed files to hosts branch"
         fi
         
         # Switch back to main branch for subsequent steps
