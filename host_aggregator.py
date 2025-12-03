@@ -299,7 +299,7 @@ def main():
         "yaml": write_yaml,
     }
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d")
     output_files = []
 
     # Generate files for each requested format
